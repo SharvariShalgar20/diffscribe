@@ -23,6 +23,25 @@ public class GitClient {
         this.repoDir = repoDir;
     }
 
+    /**
+     * Resolves the actual top-level directory of the git repo containing
+     * {@code startDir}, and returns a GitClient rooted there.
+     *
+     * This matters because `git diff --numstat` always reports paths
+     * relative to the repo root, regardless of cwd - but a later
+     * `git diff -- <path>` interprets pathspecs relative to cwd. If we ran
+     * commands from an arbitrary subdirectory (e.g. this CLI invoked from
+     * cli/ inside a larger repo), root-relative paths from numstat wouldn't
+     * match anything from that subdirectory, and the diff would silently
+     * come back empty. Always operating from the resolved root avoids that
+     * mismatch entirely.
+     */
+    public static GitClient forRepoContaining(Path startDir) throws IOException, InterruptedException {
+        GitClient probe = new GitClient(startDir);
+        String topLevel = probe.run(List.of("rev-parse", "--show-toplevel")).strip();
+        return new GitClient(Path.of(topLevel));
+    }
+
     public String run(List<String> args) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add("git");
