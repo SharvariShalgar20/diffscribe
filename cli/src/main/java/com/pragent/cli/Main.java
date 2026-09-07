@@ -1,5 +1,9 @@
 package com.pragent.cli;
 
+import com.pragent.cli.diff.DiffChunker;
+import com.pragent.cli.diff.DiffFilter;
+import com.pragent.cli.diff.NumstatParser;
+import com.pragent.cli.git.GitClient;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

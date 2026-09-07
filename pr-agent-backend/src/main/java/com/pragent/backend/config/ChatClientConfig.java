@@ -1,4 +1,4 @@
-package com.pragent.backend;
+package com.pragent.backend.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.OllamaChatModel;

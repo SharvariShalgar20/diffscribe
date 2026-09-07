@@ -1,4 +1,4 @@
-package com.pragent.cli;
+package com.pragent.cli.git;
 
 import java.io.IOException;
 import java.nio.file.Path;
