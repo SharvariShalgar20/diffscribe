@@ -1,4 +1,4 @@
-package com.pragent.backend;
+package com.pragent.backend.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 

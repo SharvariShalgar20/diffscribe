@@ -1,4 +1,4 @@
-package com.pragent.cli;
+package com.pragent.cli.diff;
 
 import java.util.ArrayList;
 import java.util.List;
