@@ -1,6 +1,7 @@
 package com.pragent.backend.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * Constrains the LLM's "type" output to a fixed set of conventional-commit
@@ -9,10 +10,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * arbitrary/incorrect values, not just prompt wording.
  */
 public enum ChangeType {
-    @JsonProperty("feat") FEAT,
-    @JsonProperty("fix") FIX,
-    @JsonProperty("refactor") REFACTOR,
-    @JsonProperty("docs") DOCS,
-    @JsonProperty("test") TEST,
-    @JsonProperty("chore") CHORE
+    FEAT,
+    FIX,
+    REFACTOR,
+    DOCS,
+    TEST,
+    CHORE;
+
+    @JsonCreator
+    public static ChangeType fromValue(String value) {
+        return ChangeType.valueOf(value.trim().toUpperCase());
+    }
+
+    @JsonValue
+    public String toValue() {
+        return name().toLowerCase();
+    }
 }
