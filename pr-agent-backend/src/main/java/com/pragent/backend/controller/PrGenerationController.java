@@ -25,6 +25,7 @@ public class PrGenerationController {
         if (request.diff() == null || request.diff().isBlank()) {
             return ResponseEntity.badRequest().body("diff must not be empty");
         }
-        return ResponseEntity.ok(prDescriptionService.generate(request.diff()));
+        PrDescription result = prDescriptionService.generate(request.diff());
+        return ResponseEntity.ok(result);
     }
 }
