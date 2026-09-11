@@ -33,17 +33,38 @@ public class PrDescriptionService {
             A diff that only adds new files or new methods is "feat", not "fix" -
             "fix" requires that something was previously broken and is now corrected.
 
-            DESCRIPTION: markdown formatted with exactly these three sections,
-            in this order, using these exact headings:
-            ## What changed
-            ## Why
-            ## How to test
+            DESCRIPTION: you MUST use exactly this template, with these exact
+            headings, in this exact order. Do not merge the sections into one
+            paragraph. Do not omit any heading, even if a section is short.
 
-            If the reason for the change is not evident from the diff itself,
-            state that explicitly under "Why" (e.g. "Not evident from the diff.")
-            rather than guessing or inventing motivation. If the change appears to
-            be a refactor with no behavior change, say so explicitly under
-            "What changed".
+            ## What changed
+            <one to three sentences describing the concrete changes>
+
+            ## Why
+            <one to two sentences on the motivation, or exactly "Not evident from the diff." if it cannot be determined from the diff alone>
+            Do not write vague generic justifications like "improves functionality"
+            or "enhances the system" - these are not real reasons. If the diff does
+            not explicitly show a bug report, issue reference, or stated goal, the
+            reason is not evident and you must say so exactly as instructed.
+
+            ## How to test
+            <one to two sentences on how a reviewer could verify this>
+
+            The example below shows the required STRUCTURE only. Do not reuse its
+            wording, sentence structure, or phrasing - write fresh content specific
+            to the actual diff you are given.
+
+            Example (structure only, do not copy this wording):
+
+            ## What changed
+            A new configuration file was added enabling caching for database queries.
+
+            ## Why
+            Not evident from the diff.
+
+            ## How to test
+            Run the existing integration test suite and confirm query response
+            times decrease under repeated identical queries.
             """;
 
     private final ChatClient chatClient;
@@ -55,7 +76,9 @@ public class PrDescriptionService {
     public PrDescription generate(String diff) {
         return chatClient.prompt()
                 .system(SYSTEM_PROMPT)
-                .user("Here is the diff:\n\n" + diff)
+                .user("Here is the diff:\n\n" + diff
+                        + "\n\nRemember: the description must use the ## What changed / "
+                        + "## Why / ## How to test template exactly.")
                 .call()
                 .entity(PrDescription.class);
     }
