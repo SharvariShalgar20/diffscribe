@@ -2,13 +2,15 @@ package com.pragent.backend.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-public record PrDescription(@JsonPropertyDescription("A short, conventional-commit-style PR title, e.g. 'feat: add diff chunking to CLI'")
-                            String title,
+public record PrDescription(
+        @JsonPropertyDescription("A short, conventional-commit-style PR title, e.g. 'feat: add diff chunking to CLI'")
+        String title,
 
-                            @JsonPropertyDescription("A description of what changed and why, based strictly on the diff provided")
-                            String description,
+        @JsonPropertyDescription("Markdown-formatted description with exactly three sections in order: " + "'## What changed', '## Why', '## How to test'")
+        String description,
 
-                            @JsonPropertyDescription("The type of change: one of feat, fix, refactor, docs, test, chore")
-                            String type) {
+        @JsonPropertyDescription("The type of change, chosen strictly by definition, not by file count or size")
+        ChangeType type)
+{
 
 }
