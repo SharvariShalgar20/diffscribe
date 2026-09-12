@@ -4,6 +4,9 @@ import com.pragent.backend.dto.PrDescription;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Owns the actual prompt-building and LLM call. Kept separate from
  * PrGenerationController so the controller stays a thin HTTP layer, and so
@@ -12,13 +15,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class PrDescriptionService {
-    private static final String SYSTEM_PROMPT = """
-            You are an assistant that writes pull request titles and descriptions
-            from a git diff.
 
-            Base everything strictly on the diff content. Do not invent changes,
-            reasons, or context that are not shown in the diff.
-
+    private static final String OUTPUT_RULES = """
             TITLE: conventional-commit style, "type: short summary", lowercase
             type, imperative mood, under ~72 characters.
 
@@ -30,7 +28,7 @@ public class PrDescriptionService {
             - test: adds or changes tests only
             - chore: build config, tooling, or dependency changes with no source behavior impact
 
-            A diff that only adds new files or new methods is "feat", not "fix" -
+            A change that only adds new files or new methods is "feat", not "fix" -
             "fix" requires that something was previously broken and is now corrected.
 
             DESCRIPTION: you MUST use exactly this template, with these exact
@@ -41,18 +39,22 @@ public class PrDescriptionService {
             <one to three sentences describing the concrete changes>
 
             ## Why
-            <one to two sentences on the motivation, or exactly "Not evident from the diff." if it cannot be determined from the diff alone>
+            <one to two sentences on the motivation, or exactly "Not evident from the diff." if it cannot be determined>
             Do not write vague generic justifications like "improves functionality"
-            or "enhances the system" - these are not real reasons. If the diff does
-            not explicitly show a bug report, issue reference, or stated goal, the
-            reason is not evident and you must say so exactly as instructed.
+            or "enhances the system" - these are not real reasons.
 
             ## How to test
             <one to two sentences on how a reviewer could verify this>
+            """;
 
-            The example below shows the required STRUCTURE only. Do not reuse its
-            wording, sentence structure, or phrasing - write fresh content specific
-            to the actual diff you are given.
+    private static final String SINGLE_DIFF_SYSTEM_PROMPT = """
+            You are an assistant that writes pull request titles and descriptions
+            from a git diff.
+
+            Base everything strictly on the diff content. Do not invent changes,
+            reasons, or context that are not shown in the diff.
+
+            """ + OUTPUT_RULES + """
 
             Example (structure only, do not copy this wording):
 
@@ -67,18 +69,74 @@ public class PrDescriptionService {
             times decrease under repeated identical queries.
             """;
 
+    private static final String CHUNK_SUMMARY_PROMPT = """
+            You are summarizing ONE part of a larger git diff that was split into
+            multiple pieces because of its size. Summarize only the concrete
+            changes shown in THIS piece, in 2 to 4 plain-text sentences. Do not
+            guess about content in parts you cannot see. Do not write a title,
+            type, or any markdown headings - plain text only.
+            """;
+
+    private static final String SYNTHESIS_SYSTEM_PROMPT = """
+            You are writing a single pull request title and description by
+            combining summaries of different parts of ONE larger diff that was
+            split into pieces due to size. Treat all summaries together as
+            describing a single overall change - do not write "part 1 does X,
+            part 2 does Y" style. Synthesize into one coherent result.
+
+            """ + OUTPUT_RULES;
+
     private final ChatClient chatClient;
 
     public PrDescriptionService(ChatClient chatClient) {
         this.chatClient = chatClient;
     }
 
-    public PrDescription generate(String diff) {
+    public PrDescription generate(List<String> diffChunks) {
+        if (diffChunks.size() == 1) {
+            return generateFromSingleDiff(diffChunks.get(0));
+        }
+        List<String> summaries = summarizeChunks(diffChunks);
+        return synthesizeFromSummaries(summaries);
+    }
+
+    private PrDescription generateFromSingleDiff(String diff) {
         return chatClient.prompt()
-                .system(SYSTEM_PROMPT)
+                .system(SINGLE_DIFF_SYSTEM_PROMPT)
                 .user("Here is the diff:\n\n" + diff
                         + "\n\nRemember: the description must use the ## What changed / "
                         + "## Why / ## How to test template exactly.")
+                .call()
+                .entity(PrDescription.class);
+    }
+
+    private List<String> summarizeChunks(List<String> diffChunks) {
+        List<String> summaries = new ArrayList<>();
+        int total = diffChunks.size();
+        for (int i = 0; i < total; i++) {
+            String summary = chatClient.prompt()
+                    .system(CHUNK_SUMMARY_PROMPT)
+                    .user("This is part " + (i + 1) + " of " + total + " of a single diff:\n\n" + diffChunks.get(i))
+                    .call()
+                    .content();
+            summaries.add(summary);
+        }
+        return summaries;
+    }
+
+    private PrDescription synthesizeFromSummaries(List<String> summaries) {
+        StringBuilder combined = new StringBuilder();
+        for (int i = 0; i < summaries.size(); i++) {
+            combined.append("Summary of part ").append(i + 1).append(":\n")
+                    .append(summaries.get(i)).append("\n\n");
+        }
+
+        return chatClient.prompt()
+                .system(SYNTHESIS_SYSTEM_PROMPT)
+                .user("Here are the part summaries:\n\n" + combined
+                        + "\nRemember: the description must use the ## What changed / "
+                        + "## Why / ## How to test template exactly, and describe the "
+                        + "change as one coherent whole.")
                 .call()
                 .entity(PrDescription.class);
     }

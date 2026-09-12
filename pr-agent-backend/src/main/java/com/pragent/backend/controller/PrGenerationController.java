@@ -22,10 +22,13 @@ public class PrGenerationController {
 
     @PostMapping("/generate-pr-description")
     public ResponseEntity<?> generate(@RequestBody GenerateRequest request) {
-        if (request.diff() == null || request.diff().isBlank()) {
-            return ResponseEntity.badRequest().body("diff must not be empty");
+        if (request.diffChunks() == null || request.diffChunks().isEmpty()) {
+            return ResponseEntity.badRequest().body("diffChunks must not be empty");
         }
-        PrDescription result = prDescriptionService.generate(request.diff());
+        if (request.diffChunks().stream().anyMatch(c -> c == null || c.isBlank())) {
+            return ResponseEntity.badRequest().body("diffChunks must not contain blank entries");
+        }
+        PrDescription result = prDescriptionService.generate(request.diffChunks());
         return ResponseEntity.ok(result);
     }
 }
