@@ -30,6 +30,8 @@ public class PrDescriptionService {
 
             A change that only adds new files or new methods is "feat", not "fix" -
             "fix" requires that something was previously broken and is now corrected.
+            
+            Adding validation, checks, or guards for a case that was never previously handled is "feat" (a new capability), NOT "fix" - "fix" only applies when existing behavior was incorrect and is now corrected. Example: adding a null-check to a method that never had one before is "feat: add input validation", not "fix: ...", unless the diff shows evidence a bug was actually occurring beforehand
 
             DESCRIPTION: you MUST use exactly this template, with these exact
             headings, in this exact order. Do not merge the sections into one
@@ -47,15 +49,7 @@ public class PrDescriptionService {
             <one to two sentences on how a reviewer could verify this>
             """;
 
-    private static final String SINGLE_DIFF_SYSTEM_PROMPT = """
-            You are an assistant that writes pull request titles and descriptions
-            from a git diff.
-
-            Base everything strictly on the diff content. Do not invent changes,
-            reasons, or context that are not shown in the diff.
-
-            """ + OUTPUT_RULES + """
-
+    private static final String FORMAT_EXAMPLE = """
             Example (structure only, do not copy this wording):
 
             ## What changed
@@ -68,6 +62,15 @@ public class PrDescriptionService {
             Run the existing integration test suite and confirm query response
             times decrease under repeated identical queries.
             """;
+
+    private static final String SINGLE_DIFF_SYSTEM_PROMPT = """
+            You are an assistant that writes pull request titles and descriptions
+            from a git diff.
+
+            Base everything strictly on the diff content. Do not invent changes,
+            reasons, or context that are not shown in the diff.
+
+            """ + OUTPUT_RULES + FORMAT_EXAMPLE;
 
     private static final String CHUNK_SUMMARY_PROMPT = """
             You are summarizing ONE part of a larger git diff that was split into
@@ -84,7 +87,7 @@ public class PrDescriptionService {
             describing a single overall change - do not write "part 1 does X,
             part 2 does Y" style. Synthesize into one coherent result.
 
-            """ + OUTPUT_RULES;
+            """ + OUTPUT_RULES + FORMAT_EXAMPLE;
 
     private final ChatClient chatClient;
 
