@@ -1,3 +1,5 @@
 package com.pragent.backend.dto;
 
-public record GenerateRequest(String diff) {}
+import java.util.List;
+
+public record GenerateRequest(List<String> diffChunks) {}
