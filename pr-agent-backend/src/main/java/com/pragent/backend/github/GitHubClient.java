@@ -16,6 +16,7 @@ import java.util.NoSuchElementException;
  */
 @Component
 public class GitHubClient {
+
     // GitHub's list-PRs response has far more fields than we need - only
     // deserialize what we actually use.
     private record PullRequestSummary(int number) {}
@@ -41,7 +42,11 @@ public class GitHubClient {
      */
     public int findOpenPrNumber(String owner, String repo, String branch) {
         List<PullRequestSummary> prs = restClient.get()
-                .uri("/repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}", owner, repo, branch)
+                .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repo}/pulls")
+                        .queryParam("state", "open")
+                        .queryParam("head", owner + ":" + branch)
+                        .build(owner, repo))
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<PullRequestSummary>>() {});
 
