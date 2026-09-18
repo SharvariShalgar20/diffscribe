@@ -65,4 +65,40 @@ public class GitClient {
         }
         return stdout;
     }
+
+    public String getCurrentBranch() throws IOException, InterruptedException {
+        return run(List.of("rev-parse", "--abbrev-ref", "HEAD")).strip();
+    }
+
+    /**
+     * Parses the owner and repo name out of the 'origin' remote URL.
+     * Handles both SSH (git@github.com:owner/repo.git) and HTTPS
+     * (https://github.com/owner/repo.git) remote URL formats.
+     */
+    public String[] getRemoteOwnerAndRepo() throws IOException, InterruptedException {
+        String remoteUrl = run(List.of("remote", "get-url", "origin")).strip();
+
+        String cleaned = remoteUrl;
+        if (cleaned.endsWith(".git")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 4);
+        }
+
+        String path;
+        if (cleaned.startsWith("git@")) {
+            int colonIndex = cleaned.indexOf(':');
+            path = cleaned.substring(colonIndex + 1);
+        } else {
+            int hostIndex = cleaned.indexOf("github.com/");
+            if (hostIndex == -1) {
+                throw new IllegalStateException("Remote URL doesn't look like a GitHub URL: " + remoteUrl);
+            }
+            path = cleaned.substring(hostIndex + "github.com/".length());
+        }
+
+        String[] parts = path.split("/", 2);
+        if (parts.length != 2) {
+            throw new IllegalStateException("Could not parse owner/repo from remote URL: " + remoteUrl);
+        }
+        return parts; // [owner, repo]
+    }
 }
