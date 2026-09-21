@@ -8,3 +8,6 @@ java -jar target\pr-agent-cli.jar --base main > diff.txt
 # being pushed, via pr-agent. Never blocks the actual push - if pr-agent
 # fails (no PR yet, backend not running, etc.) that's logged and ignored,
 # not treated as a reason to stop the push.
+
+#start backend -
+.\mvnw spring-boot:run '-Dspring-boot.run.jvmArguments=-Djava.net.preferIPv4Stack=true'
