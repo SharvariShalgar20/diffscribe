@@ -1,0 +1,17 @@
+#!/bin/sh
+# pre-push hook: automatically updates the open PR (if any) for the branch
+# being pushed, via pr-agent. Never blocks the actual push - if pr-agent
+# fails (no PR yet, backend not running, etc.) that's logged and ignored,
+# not treated as a reason to stop the push.
+
+CLI_JAR="$(git rev-parse --show-toplevel)/cli/target/pr-agent-cli.jar"
+
+if [ ! -f "$CLI_JAR" ]; then
+  echo "pr-agent: CLI jar not found at $CLI_JAR, skipping PR update."
+  exit 0
+fi
+
+echo "pr-agent: updating PR description..."
+java -jar "$CLI_JAR" --base main || echo "pr-agent: update failed or no PR exists yet for this branch (this is OK, push continues)."
+
+exit 0
