@@ -101,4 +101,8 @@ public class GitClient {
         }
         return parts; // [owner, repo]
     }
+
+    public java.nio.file.Path getRepoRoot() {
+        return repoDir;
+    }
 }
