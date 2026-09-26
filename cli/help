@@ -4,7 +4,11 @@ Start application-
 
 java -jar target\pr-agent-cli.jar
 
-//No need for --base flag at all
+# No need for --base flag at all
+
+# To print all the chunks to diff.txt
+java -jar target\pr-agent-cli.jar --dry-run > diff.txt
+
 
 # pre-push hook: automatically updates the open PR (if any) for the branch
 # being pushed, via pr-agent. Never blocks the actual push - if pr-agent
