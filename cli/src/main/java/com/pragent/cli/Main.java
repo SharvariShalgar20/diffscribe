@@ -1,5 +1,6 @@
 package com.pragent.cli;
 
+import com.pragent.cli.config.CliConfig;
 import com.pragent.cli.diff.DiffChunker;
 import com.pragent.cli.diff.DiffFilter;
 import com.pragent.cli.diff.NumstatParser;
@@ -10,6 +11,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -17,25 +19,25 @@ import java.util.stream.Collectors;
 @Command(
         name = "pr-agent",
         mixinStandardHelpOptions = true,
-        version = "pr-agent-cli 0.5.0",
+        version = "pr-agent-cli 0.6.0",
         description = "Generates a PR title/description from a git diff and updates the PR on GitHub."
 )
 public class Main implements Runnable {
 
-    @Option(names = {"--base"}, required = true,
-            description = "Base branch/ref to diff against, e.g. main or origin/main.")
+    @Option(names = {"--base"},
+            description = "Base branch/ref to diff against, e.g. main. Falls back to default.base in .pragent.properties if not given.")
     private String base;
 
     @Option(names = {"--repo-path"}, defaultValue = ".",
             description = "Path to the git repository. Defaults to the current directory.")
     private String repoPath;
 
-    @Option(names = {"--max-chunk-chars"}, defaultValue = "8000",
-            description = "Max characters per chunk when the diff is split for the LLM.")
-    private int maxChunkChars;
+    @Option(names = {"--max-chunk-chars"},
+            description = "Max characters per chunk. Falls back to max.chunk.chars in .pragent.properties, then 8000.")
+    private Integer maxChunkChars;
 
-    @Option(names = {"--backend-url"}, defaultValue = "http://localhost:8080",
-            description = "Base URL of the pr-agent backend service.")
+    @Option(names = {"--backend-url"},
+            description = "Base URL of the pr-agent backend. Falls back to backend.url in .pragent.properties, then http://localhost:8080.")
     private String backendUrl;
 
     @Option(names = {"--dry-run"},
@@ -45,7 +47,17 @@ public class Main implements Runnable {
     @Override
     public void run() {
         try {
-            List<String> chunks = extractDiffChunks();
+            Path repoDir = Path.of(repoPath).toAbsolutePath().normalize();
+            GitClient git = GitClient.forRepoContaining(repoDir);
+            CliConfig config = CliConfig.loadFrom(git.getRepoRoot());
+
+            String effectiveBase = resolveBase(config);
+            String effectiveBackendUrl = backendUrl != null ? backendUrl
+                    : config.backendUrl().orElse("http://localhost:8080");
+            int effectiveMaxChunkChars = maxChunkChars != null ? maxChunkChars
+                    : config.maxChunkChars().orElse(8000);
+
+            List<String> chunks = extractDiffChunks(git, effectiveBase, effectiveMaxChunkChars);
             if (chunks == null) {
                 return;
             }
@@ -53,7 +65,7 @@ public class Main implements Runnable {
             if (dryRun) {
                 printChunks(chunks);
             } else {
-                callBackendAndUpdatePr(chunks);
+                callBackendAndUpdatePr(git, chunks, effectiveBackendUrl);
             }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
@@ -61,9 +73,15 @@ public class Main implements Runnable {
         }
     }
 
-    private List<String> extractDiffChunks() throws Exception {
-        java.nio.file.Path repoDir = java.nio.file.Path.of(repoPath).toAbsolutePath().normalize();
-        GitClient git = GitClient.forRepoContaining(repoDir);
+    private String resolveBase(CliConfig config) {
+        if (base != null) {
+            return base;
+        }
+        return config.defaultBase().orElseThrow(() -> new IllegalArgumentException(
+                "--base is required (pass it directly, or set default.base in .pragent.properties)."));
+    }
+
+    private List<String> extractDiffChunks(GitClient git, String base, int maxChunkChars) throws Exception {
         DiffFilter filter = new DiffFilter();
         DiffChunker chunker = new DiffChunker();
 
@@ -114,10 +132,7 @@ public class Main implements Runnable {
         }
     }
 
-    private void callBackendAndUpdatePr(List<String> chunks) throws Exception {
-        java.nio.file.Path repoDir = java.nio.file.Path.of(repoPath).toAbsolutePath().normalize();
-        GitClient git = GitClient.forRepoContaining(repoDir);
-
+    private void callBackendAndUpdatePr(GitClient git, List<String> chunks, String backendUrl) throws Exception {
         String[] ownerAndRepo = git.getRemoteOwnerAndRepo();
         String owner = ownerAndRepo[0];
         String repo = ownerAndRepo[1];
