@@ -1,6 +1,7 @@
 package com.pragent.backend.service;
 
 import com.pragent.backend.dto.PrDescription;
+import com.pragent.backend.ollama.OllamaHealthChecker;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
@@ -90,12 +91,15 @@ public class PrDescriptionService {
             """ + OUTPUT_RULES + FORMAT_EXAMPLE;
 
     private final ChatClient chatClient;
+    private final OllamaHealthChecker ollamaHealthChecker;
 
-    public PrDescriptionService(ChatClient chatClient) {
+    public PrDescriptionService(ChatClient chatClient, OllamaHealthChecker ollamaHealthChecker) {
         this.chatClient = chatClient;
+        this.ollamaHealthChecker = ollamaHealthChecker;
     }
 
     public PrDescription generate(List<String> diffChunks) {
+        ollamaHealthChecker.checkReachableOrThrow();
         if (diffChunks.size() == 1) {
             return generateFromSingleDiff(diffChunks.get(0));
         }
