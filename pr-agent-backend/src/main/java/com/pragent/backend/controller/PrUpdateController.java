@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.NoSuchElementException;
-
 @RestController
 @RequestMapping("/api/pr")
 public class PrUpdateController {
@@ -30,12 +28,10 @@ public class PrUpdateController {
             return ResponseEntity.badRequest().body("diffChunks must not be empty");
         }
 
-        try {
-            UpdatePrResponse response = prUpdateService.updateExistingPr(request);
-            return ResponseEntity.ok(response);
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.status(404).body(e.getMessage());
-        }
+        // NoSuchElementException (no matching PR) and OllamaUnavailableException
+        // are now handled centrally by ApiExceptionHandler.
+        UpdatePrResponse response = prUpdateService.updateExistingPr(request);
+        return ResponseEntity.ok(response);
     }
 
     private boolean isBlank(String s) {
