@@ -1,14 +1,15 @@
 package com.pragent.backend.config;
 
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Binds the github.token property from application.yml (which itself reads
- * it from the GITHUB_TOKEN environment variable via Spring's placeholder
- * syntax). A dedicated properties record instead of scattering field-level
- * value-injection annotations across classes - one typed place, easy to test.
- */
 @ConfigurationProperties(prefix = "github")
 public record GitHubProperties(String token) {
+
+    public GitHubProperties {
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException(
+                    "GITHUB_TOKEN is not set. Set it as an environment variable "
+                            + "(never in application.yml) and restart the backend.");
+        }
+    }
 }
