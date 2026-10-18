@@ -1,157 +1,179 @@
-# pr-agent
+# diffscribe (pr-agent)
 
-Automatically generates PR titles and descriptions from a git diff, using a
-local LLM via Ollama and Spring AI, and writes them directly onto a real
-GitHub PR — fully automatically on `git push`. No manual copy-pasting diffs
-into a chatbot, no manual Postman calls.
+Writes your pull request title and description for you. On `git push`, a local CLI extracts the diff, a Spring AI backend generates a title and description with a **local** Ollama model, and the result is written onto your open GitHub PR. No diffs are pasted into a chatbot, and no code leaves your machine except the PR text sent to GitHub.
 
-**Status: Phases 0–5 complete. This is a working, end-to-end tool.**
-
-## What it actually does today
-
-1. You `git push` a branch with an open PR.
-2. A `pre-push` git hook fires automatically.
-3. The CLI extracts and cleans the diff (noise-filtered, chunked if large).
-4. It calls the local backend, which generates a title/description via a
-   local Ollama model.
-5. The backend finds the matching open PR on GitHub and updates its
-   title/description via the GitHub API.
-6. Your push completes normally either way — if any of the above fails
-   (no PR yet, backend down, etc.), it's logged and ignored, never blocks
-   the actual push.
-
-## Architecture
+## How it works
 
 ```
-cli/       Java CLI. Extracts + cleans the diff, calls the backend.
-                |
-                | HTTP POST { repoOwner, repoName, branch, diffChunks }
-                v
-backend/   Spring Boot + Spring AI. Generates via local Ollama, finds the
-           open PR for that branch, PATCHes its title/body via GitHub API.
-                |
-                v
-           The real PR on GitHub gets updated.
-
-.githooks/pre-push   Fires the CLI automatically on every git push.
+git push
+   |
+   v
+pre-push hook (global, opt-in per repo)
+   |
+   v
+cli/   Extracts and filters the diff, detects owner/repo/branch from git,
+       POSTs to the backend.
+   |    HTTP POST /api/pr/update { repoOwner, repoName, branch, diffChunks }
+   v
+pr-agent-backend/   Spring Boot + Spring AI. Checks Ollama is reachable,
+                    generates title/description (map-reduce for large diffs),
+                    finds the open PR for the branch, updates it via the
+                    GitHub REST API.
+   |
+   v
+The PR on GitHub is updated. The push itself always completes, even if
+diffscribe fails for any reason.
 ```
 
-`cli/` and `backend/` are two independent Maven projects (not a
-multi-module build) — separate deployables, mirroring the local-agent/
-backend split used in the apiVault project.
+The two projects are independent Maven projects (separate deployables), mirroring a local-agent / backend split.
 
-### Package structure
+## Repository layout
 
-**Backend** (`com.pragent.backend`):
 ```
-config/      ChatClientConfig, GitHubProperties
-controller/  HealthController, PrGenerationController, PrUpdateController
-dto/         GenerateRequest, PrDescription, ChangeType,
-             UpdatePrRequest, UpdatePrResponse
-service/     PrDescriptionService (prompts + multi-chunk map-reduce),
-             PrUpdateService (orchestrates generate -> GitHub update)
-github/      GitHubClient (find open PR by branch, update it)
+cli/                 Java CLI (picocli, Jackson). Builds target/pr-agent-cli.jar
+  install.sh         One-time global installer (jar + hook)
+pr-agent-backend/    Spring Boot backend
+.githooks/pre-push   Repo-local hook used when developing diffscribe itself
+.pragent.properties  Per-repo CLI settings (opt-in marker for the global hook)
 ```
 
-**CLI** (`com.pragent.cli`):
-```
-git/         GitClient (shells out to git; resolves repo root, current
-             branch, and owner/repo from the 'origin' remote)
-diff/        DiffFilter, NumstatParser, DiffChunker
-http/        BackendClient, UpdatePrRequest, UpdatePrResponse
-             (talks to the backend using Jackson, not hand-built JSON)
-```
+Backend packages (`com.pragent.backend`): `config`, `controller`, `dto`, `service`, `github`, `ollama`.
+CLI packages (`com.pragent.cli`): `git`, `diff`, `http`, `config`.
 
-## Prerequisites
+## Requirements
 
-- **Java 21**, **Maven** (or use IntelliJ's Maven tool window if `mvn`
-  isn't on PATH)
-- **[Ollama](https://ollama.com)**, running locally with a model pulled
-- **Git**, with a GitHub remote
-- **A GitHub Personal Access Token** (`repo` scope)
+- Java 17 or newer (both projects target 17)
+- Maven (the backend also ships `mvnw`)
+- Git, and Git Bash on Windows (the installer and hook are POSIX shell scripts)
+- [Ollama](https://ollama.com) with a model pulled
+- A GitHub personal access token (see below)
 
-## One-time setup
+## Quick start (new machine)
 
-```bash
-ollama pull qwen2.5-coder:1.5b
-```
+1. **Ollama:** install it, then `ollama pull qwen2.5-coder:1.5b`. Larger models give better output: set `OLLAMA_MODEL` (for example `qwen2.5-coder:7b`).
+2. **GitHub token:** follow "GitHub token setup" below.
+3. **Backend:** `cd pr-agent-backend && ./mvnw spring-boot:run` (Windows: `.\mvnw spring-boot:run`). Check it with `curl http://localhost:8080/api/health` and `curl http://localhost:8080/api/test-llm` (the second one exercises Ollama).
+4. **CLI:** `cd cli && mvn clean package`, then in Git Bash `./install.sh`.
+5. **Opt a repo in:** create `.pragent.properties` at the repo root (see Configuration).
+6. **Use it:** open a PR for your branch on GitHub, then `git push`. The PR title and description update automatically.
+
+Each user runs their own backend and uses their **own** token. Nobody needs anyone else's credentials.
+
+## GitHub token setup
+
+The backend needs a GitHub Personal Access Token (PAT) to update PRs on your behalf. Provide it as the `GITHUB_TOKEN` environment variable. Never write it into `application.yaml` or any file that gets committed.
+
+### 1. Create a token
+
+GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token. Select the **`repo`** scope. Copy the token immediately, because GitHub shows it only once.
+
+### 2. Set it as an environment variable
+
+**Windows (PowerShell), persistent:**
 ```powershell
-$env:GITHUB_TOKEN="ghp_..."   # or set permanently via Windows Environment Variables
+[Environment]::SetEnvironmentVariable("GITHUB_TOKEN", "ghp_your_token_here", "User")
 ```
+GUI alternative: Start → "Edit environment variables for your account" → New → name `GITHUB_TOKEN`.
+
+**macOS / Linux:** add to `~/.zshrc` or `~/.bashrc`, then restart the terminal:
 ```bash
-cd backend && mvn spring-boot:run &   # keep running in the background
-cd cli && mvn clean package
-```
-```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/pre-push          # via Git Bash
+export GITHUB_TOKEN="ghp_your_token_here"
 ```
 
-After this, automation "just works" on every push, as long as the backend
-is running locally.
+### 3. Restart whatever launches the backend
 
-## Manual usage (without the hook)
+Environment variables are read when a process starts, and each terminal has its own copy. Open a **new** terminal, and fully restart IntelliJ if you run the backend from it (or set the variable in its Run Configuration instead).
 
-```bash
-java -jar target/pr-agent-cli.jar --base main
+### 4. Verify
+
+```powershell
+$env:GITHUB_TOKEN.Substring(0,4)   # should print: ghp_
 ```
-Auto-detects owner/repo (from `git remote`) and branch (from `git
-rev-parse`), extracts the diff, calls the backend, updates the matching
-open PR, and prints the result.
 
-`--dry-run` skips the backend call entirely and just prints the filtered
-diff to stdout — useful for debugging diff extraction without touching
-the network or GitHub.
-
-| Flag | Purpose | Default |
-|---|---|---|
-| `--base` | Branch/ref to diff against | required |
-| `--repo-path` | Path to the git repo | `.` |
-| `--max-chunk-chars` | Max size per chunk | `8000` |
-| `--backend-url` | Backend base URL | `http://localhost:8080` |
-| `--dry-run` | Print diff only, no backend call | off |
-
-## API endpoints (for manual testing / debugging)
-
-**`POST /api/generate-pr-description`** — generate only, no side effects.
-`{ "diffChunks": [...] }` → `{ title, description, type }`
-
-**`POST /api/pr/update`** — generate and write to a real PR.
-`{ repoOwner, repoName, branch, diffChunks }` → `{ generated, prNumber, prUrl }`.
-`404` if no open PR matches the branch — this endpoint updates existing
-PRs, it does not create them.
-
-## Configuration
+### 5. Confirm `application.yaml` holds only the placeholder
 
 ```yaml
-spring:
-  ai:
-    ollama:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      chat:
-        options:
-          model: ${OLLAMA_MODEL:qwen2.5-coder:1.5b}
 github:
   token: ${GITHUB_TOKEN:}
 ```
-Real secrets live only in environment variables, never in this file.
 
-## Known limitations (accepted baseline)
+The backend refuses to start if the token is missing or blank, and says so.
 
-- **`type` classification and the "Why" section are unreliable on nuanced
-  diffs** (refactors, validation additions) on `qwen2.5-coder:1.5b`, despite
-  several rounds of prompt refinement. Straightforward feature additions
-  classify correctly; ambiguous ones don't always.
-- **The three-heading description template isn't 100% reliable**, even with
-  a shared worked example — confirmed on a real multi-chunk PR update.
-  Probabilistic model behavior, not a fixable prompt bug at this model size.
-- **The pre-push hook assumes `cli/` lives in the same repo being pushed**
-  (true for this dogfooding setup). Installing the hook into a different
-  repo would need the jar path made configurable — planned for Phase 6.
-- **First push of a new branch always "fails" gracefully** (no PR exists
-  yet to update) — expected, not a bug; push a second time after creating
-  the PR on GitHub.
+## Configuration
 
-If quality becomes a blocker: bump to `qwen2.5-coder:7b` if disk space
-allows, or switch to a cloud provider (OpenAI/Gemini/Claude) — Spring AI's
-abstraction makes that a config change, not a rewrite.
+**Backend** (`pr-agent-backend/src/main/resources/application.yaml`). Every value is overridable by environment variable:
+
+| Setting | Env var | Default |
+|---|---|---|
+| Ollama URL | `OLLAMA_BASE_URL` | `http://localhost:11434` |
+| Model | `OLLAMA_MODEL` | `qwen2.5-coder:1.5b` |
+| GitHub token | `GITHUB_TOKEN` | none (required) |
+
+**CLI** (`.pragent.properties` at the repo root, optional keys):
+
+```properties
+backend.url=http://localhost:8080
+default.base=main
+max.chunk.chars=8000
+```
+
+Precedence: command-line flag, then `.pragent.properties`, then the built-in default. `--base` has **no** built-in default on purpose: pass it, or set `default.base`.
+
+## Using the CLI directly
+
+```bash
+java -jar cli/target/pr-agent-cli.jar --base main
+```
+
+| Flag | Purpose |
+|---|---|
+| `--base` | Branch/ref to diff against (required unless `default.base` is set) |
+| `--repo-path` | Repo location (default `.`) |
+| `--max-chunk-chars` | Chunk size before splitting (default 8000) |
+| `--backend-url` | Backend URL (default `http://localhost:8080`) |
+| `--dry-run` | Print the filtered diff only. No network calls, no side effects |
+
+Only **committed** changes on your branch versus the base are seen. Uncommitted work and running while on the base branch itself produce "no changes".
+
+## Automation
+
+**Recommended: global install.** From `cli/`, in Git Bash, after `mvn clean package`:
+```bash
+./install.sh
+```
+This copies the jar to `~/.pragent/`, writes a global `pre-push` hook, and sets `git config --global core.hooksPath`. The hook only runs in repos that contain a `.pragent.properties` file, and it never blocks a push. If diffscribe fails (backend down, no PR yet, and so on), it prints a message and the push continues. Re-run `install.sh` after rebuilding the CLI.
+
+Notes:
+- The installer records the full path of the `java` it finds, because git hooks can see a different `PATH` than your terminal. If that Java is older than 17 the jar won't run.
+- A repo-local `core.hooksPath` overrides the global one. This repo has one (`.githooks`), so diffscribe's own hook is the repo-local `.githooks/pre-push`.
+- A brand-new branch has no PR yet, so the first push just logs "no open PR". Create the PR on GitHub, and later pushes update it.
+
+## API
+
+- `POST /api/generate-pr-description`: `{ "diffChunks": [...] }`. Generate only, no side effects. One chunk is a single call. Several chunks are summarized one at a time and then synthesized into one result.
+- `POST /api/pr/update`: `{ "repoOwner", "repoName", "branch", "diffChunks" }`. Generates, then updates the open PR for that branch. It does not create PRs.
+- `GET /api/health`, `GET /api/test-llm`: liveness and an end-to-end Ollama check.
+
+## Error reference
+
+| Where | Message / status | Meaning |
+|---|---|---|
+| Backend `503` | Ollama is not reachable | Ollama isn't running or the URL is wrong. Fails in about 3 seconds |
+| Backend `404` | No open PR found / GitHub returned 404 | Create the PR first; check owner/repo and token scope |
+| Backend `429` | GitHub API rate limit reached | Wait as the message says |
+| Backend `502` | GitHub rejected the token / denied access | Token expired, revoked, or missing `repo` scope |
+| CLI | Could not connect to backend | Start the backend |
+| CLI | Backend did not respond within 5 minutes | Large diff or a stuck Ollama |
+
+The `429` branch has not yet been exercised against a real GitHub rate limit. The `401` path uses the same translation code and has been tested.
+
+## Known limitations
+
+- **Output quality depends on the model.** With `qwen2.5-coder:1.5b` (chosen for disk space):
+  - `type` is sometimes wrong for refactors and added validation (labelled `fix` instead of `feat`).
+  - The "Why" section can invent a plausible reason instead of saying it isn't evident.
+  - The three-heading template (`## What changed`, `## Why`, `## How to test`) is not always followed on large multi-chunk diffs.
+  Setting `OLLAMA_MODEL` to a bigger model needs no code changes.
+- Only updates existing PRs. `pre-push` runs before the branch exists on GitHub, so it cannot create one on the first push.
+- No automated tests yet.
+- Local-first: each user runs their own backend and Ollama. There is no hosted version.
