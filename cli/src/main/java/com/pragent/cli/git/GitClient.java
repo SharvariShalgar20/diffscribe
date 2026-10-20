@@ -76,8 +76,10 @@ public class GitClient {
      * (https://github.com/owner/repo.git) remote URL formats.
      */
     public String[] getRemoteOwnerAndRepo() throws IOException, InterruptedException {
-        String remoteUrl = run(List.of("remote", "get-url", "origin")).strip();
+        return parseOwnerAndRepo(run(List.of("remote", "get-url", "origin")).strip());
+    }
 
+    static String[] parseOwnerAndRepo(String remoteUrl) {
         String cleaned = remoteUrl;
         if (cleaned.endsWith(".git")) {
             cleaned = cleaned.substring(0, cleaned.length() - 4);
