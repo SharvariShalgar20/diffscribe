@@ -18,10 +18,12 @@ public class PrUpdateService {
     }
 
     public UpdatePrResponse updateExistingPr(UpdatePrRequest request) {
-        PrDescription generated = prDescriptionService.generate(request.diffChunks());
-
+        // Look the PR up first: if there isn't one, fail fast instead of
+        // spending minutes of model time on a description nobody can use.
         int prNumber = gitHubClient.findOpenPrNumber(
                 request.repoOwner(), request.repoName(), request.branch());
+
+        PrDescription generated = prDescriptionService.generate(request.diffChunks());
 
         String prUrl = gitHubClient.updatePr(
                 request.repoOwner(), request.repoName(), prNumber,
