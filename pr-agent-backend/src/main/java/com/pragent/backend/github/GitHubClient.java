@@ -73,7 +73,7 @@ public class GitHubClient {
      * so the status code alone can't distinguish "rate limited" from
      * "forbidden".
      */
-    private RuntimeException translate(HttpClientErrorException e) {
+    static RuntimeException translate(HttpClientErrorException e) {
         int status = e.getStatusCode().value();
         HttpHeaders headers = e.getResponseHeaders();
 
@@ -99,7 +99,7 @@ public class GitHubClient {
         return e;
     }
 
-    private String describeWait(HttpHeaders headers) {
+    private static String describeWait(HttpHeaders headers) {
         String retryAfter = headers.getFirst("retry-after");
         if (retryAfter != null) {
             return "Retry in " + retryAfter + " seconds.";
