@@ -1,3 +1,5 @@
+![CI](https://github.com/SharvariShalgar20/diffscribe/actions/workflows/ci.yml/badge.svg)
+
 # diffscribe (pr-agent)
 
 Writes your pull request title and description for you. On `git push`, a local CLI extracts the diff, a Spring AI backend generates a title and description with a **local** Ollama model, and the result is written onto your open GitHub PR. No diffs are pasted into a chatbot, and no code leaves your machine except the PR text sent to GitHub.
