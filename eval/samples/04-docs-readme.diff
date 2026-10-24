@@ -1,0 +1,16 @@
+diff --git a/README.md b/README.md
+index 1a2b3c4..5d6e7f8 100644
+--- a/README.md
++++ b/README.md
+@@ -3,2 +3,11 @@
+ A small shop API built with Spring Boot.
+ 
++## Running locally
++
++1. Install Java 17.
++2. Run `./mvnw spring-boot:run`.
++3. Open http://localhost:8080/api/health.
++
++## Configuration
++
++Set `DB_URL` to point at your database.

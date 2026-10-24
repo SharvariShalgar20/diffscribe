@@ -1,0 +1,14 @@
+diff --git a/src/main/java/com/example/shop/PageService.java b/src/main/java/com/example/shop/PageService.java
+index 5c1a7e2..8be03d1 100644
+--- a/src/main/java/com/example/shop/PageService.java
++++ b/src/main/java/com/example/shop/PageService.java
+@@ -14,7 +14,8 @@ public class PageService {
+     public List<Item> lastPage(List<Item> items, int pageSize) {
+         int start = ((items.size() - 1) / pageSize) * pageSize;
+         List<Item> page = new ArrayList<>();
+-        for (int i = start; i < items.size() - 1; i++) {
++        // include the final item: the old bound dropped the last element of every last page
++        for (int i = start; i < items.size(); i++) {
+             page.add(items.get(i));
+         }
+         return page;
