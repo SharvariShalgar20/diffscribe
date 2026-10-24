@@ -1,0 +1,23 @@
+diff --git a/src/test/java/com/example/shop/PageServiceTest.java b/src/test/java/com/example/shop/PageServiceTest.java
+new file mode 100644
+index 0000000..c91d2ab
+--- /dev/null
++++ b/src/test/java/com/example/shop/PageServiceTest.java
+@@ -0,0 +1,17 @@
++package com.example.shop;
++
++import org.junit.jupiter.api.Test;
++
++import java.util.List;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++class PageServiceTest {
++
++    @Test
++    void lastPageContainsTheFinalItem() {
++        List<Item> items = List.of(new Item(1), new Item(2), new Item(3));
++        List<Item> page = new PageService().lastPage(items, 2);
++        assertEquals(List.of(new Item(3)), page);
++    }
++}

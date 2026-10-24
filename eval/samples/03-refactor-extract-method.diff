@@ -1,0 +1,23 @@
+diff --git a/src/main/java/com/example/shop/OrderService.java b/src/main/java/com/example/shop/OrderService.java
+index 77a1c30..e4b9d58 100644
+--- a/src/main/java/com/example/shop/OrderService.java
++++ b/src/main/java/com/example/shop/OrderService.java
+@@ -9,9 +9,13 @@ public class OrderService {
+ 
+     public double total(Order order) {
+-        double sum = 0;
+-        for (OrderLine line : order.lines()) {
+-            sum += line.price() * line.quantity();
+-        }
+-        return sum;
++        return sumLines(order.lines());
++    }
++
++    private double sumLines(List<OrderLine> lines) {
++        double sum = 0;
++        for (OrderLine line : lines) {
++            sum += line.price() * line.quantity();
++        }
++        return sum;
+     }
+ }
