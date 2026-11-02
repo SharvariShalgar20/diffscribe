@@ -13,6 +13,7 @@ spring:
           # Quality is lower than 7b for complex diffs; revisit if space frees up
           # or when switching to a cloud provider becomes worthwhile.
           model: ${OLLAMA_MODEL:qwen2.5-coder:1.5b}
+          temperature: 0.2
     retry:
       max-attempts: 2
 
