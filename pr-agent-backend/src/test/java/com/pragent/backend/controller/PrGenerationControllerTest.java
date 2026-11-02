@@ -2,6 +2,7 @@ package com.pragent.backend.controller;
 
 import com.pragent.backend.dto.ChangeType;
 import com.pragent.backend.dto.PrDescription;
+import com.pragent.backend.service.ModelOutputException;
 import com.pragent.backend.service.PrDescriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,5 +49,11 @@ class PrGenerationControllerTest {
     void validRequestReturns200() throws Exception {
         when(service.generate(any())).thenReturn(new PrDescription("feat: x", "body", ChangeType.FEAT));
         send("{\"diffChunks\":[\"real diff\"]}").andExpect(status().isOk());
+    }
+
+    @Test
+    void unusableModelOutputMapsTo502() throws Exception {
+        when(service.generate(any())).thenThrow(new ModelOutputException("no type"));
+        send("{\"diffChunks\":[\"real diff\"]}").andExpect(status().isBadGateway());
     }
 }
