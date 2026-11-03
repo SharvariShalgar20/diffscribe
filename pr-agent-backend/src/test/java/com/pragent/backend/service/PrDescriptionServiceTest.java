@@ -82,4 +82,23 @@ class PrDescriptionServiceTest {
         assertEquals(ChangeType.DOCS, result.type());
         assertTrue(result.title().startsWith("docs: "), result.title());
     }
+
+    @Test
+    void appendsReviewerNotesWhenSourceChangesHaveNoTests() {
+        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+
+        PrDescription result = service.generate(List.of(JAVA_DIFF));
+
+        assertTrue(result.description().contains("Reviewer notes (automated)"));
+        assertTrue(result.description().contains("No test files"));
+    }
+
+    @Test
+    void docsOnlyChangeGetsNoReviewerNotes() {
+        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+
+        PrDescription result = service.generate(List.of(README_DIFF));
+
+        assertFalse(result.description().contains("Reviewer notes"));
+    }
 }
