@@ -118,9 +118,12 @@ public class PrDescriptionService {
             type = ruled.get();
         }
 
+        String description = ModelOutputParser.formatDescription(parsed)
+                + RiskFlags.render(RiskFlags.notes(diffChunks));
+
         return new PrDescription(
                 ModelOutputParser.formatTitle(type, parsed.summary()),
-                ModelOutputParser.formatDescription(parsed),
+                description,
                 type);
     }
 

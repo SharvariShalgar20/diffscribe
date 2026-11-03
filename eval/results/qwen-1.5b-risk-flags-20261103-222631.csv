@@ -1,0 +1,8 @@
+"Sample","Run","Expected","Got","Type","Title","Headings","Seconds","TitleText","Note"
+"01-feat-new-endpoint.diff","1","feat","fix","False","True","True","21","fix: update app version in InfoController",
+"02-fix-off-by-one.diff","1","fix","fix","True","True","True","7.8","fix: include the final item in the last page",
+"03-refactor-extract-method.diff","1","refactor","fix","False","True","True","6.8","fix: update total method to use sumLines method",
+"04-docs-readme.diff","1","docs","docs","True","True","True","5.4","docs: update README.md to include running locally instructions",
+"05-test-add-tests.diff","1","test","test","True","True","True","6.9","test: add test for lastPage method in PageService",
+"06-chore-dependency-bump.diff","1","chore","chore","True","True","True","5.8","chore: update jackson-databind version to 2.17.2",
+"07-feat-add-validation.diff","1","feat","fix","False","True","True","8.4","fix: validate coupon code and price",
