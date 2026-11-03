@@ -60,11 +60,11 @@ final class TypeRules {
         return Optional.empty();
     }
 
-    private static String fileName(String path) {
+    static String fileName(String path) {
         return path.substring(path.lastIndexOf('/') + 1);
     }
 
-    private static boolean isDocs(String path) {
+    static boolean isDocs(String path) {
         String p = "/" + path.toLowerCase(Locale.ROOT);
         String name = fileName(p);
         return p.startsWith("/docs/")
@@ -72,13 +72,13 @@ final class TypeRules {
                 || DOC_EXTENSIONS.stream().anyMatch(name::endsWith);
     }
 
-    private static boolean isTest(String path) {
+    static boolean isTest(String path) {
         String p = "/" + path.toLowerCase(Locale.ROOT);
         return p.contains("/test/") || p.contains("/tests/") || p.contains("/__tests__/")
                 || TEST_FILE.matcher(fileName(path)).matches();
     }
 
-    private static boolean isBuildOrConfig(String path) {
+    static boolean isBuildOrConfig(String path) {
         String p = "/" + path.toLowerCase(Locale.ROOT);
         return BUILD_FILES.contains(fileName(p))
                 || p.startsWith("/.github/")
