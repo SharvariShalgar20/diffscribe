@@ -24,6 +24,44 @@ public class GitHubClient {
 
     private final RestClient restClient;
 
+    private record LabelName(String name) {}
+
+    private record CreateLabelPayload(String name, String color, String description) {}
+
+    private record SetLabelsPayload(List<String> labels) {}
+
+    public List<String> getLabelNames(String owner, String repo, int issueNumber) {
+        List<LabelName> labels = restClient.get()
+                .uri("/repos/{owner}/{repo}/issues/{number}/labels", owner, repo, issueNumber)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<LabelName>>() {});
+        return labels == null ? List.of() : labels.stream().map(LabelName::name).toList();
+    }
+
+    /** Creates the label if it doesn't exist. GitHub answers 422 when it already does. */
+    public void ensureLabelExists(String owner, String repo, String name, String color, String description) {
+        try {
+            restClient.post()
+                    .uri("/repos/{owner}/{repo}/labels", owner, repo)
+                    .body(new CreateLabelPayload(name, color, description))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() != 422) {
+                throw e;
+            }
+        }
+    }
+
+    /** Replaces the PR's whole label list, so callers pass the full desired set. */
+    public void setLabels(String owner, String repo, int issueNumber, List<String> labels) {
+        restClient.put()
+                .uri("/repos/{owner}/{repo}/issues/{number}/labels", owner, repo, issueNumber)
+                .body(new SetLabelsPayload(labels))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     public GitHubClient(GitHubProperties properties) {
         this.restClient = RestClient.builder()
                 .baseUrl("https://api.github.com")
