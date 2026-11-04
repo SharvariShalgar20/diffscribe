@@ -11,10 +11,13 @@ public class PrUpdateService {
 
     private final PrDescriptionService prDescriptionService;
     private final GitHubClient gitHubClient;
+    private final PrLabeler prLabeler;
 
-    public PrUpdateService(PrDescriptionService prDescriptionService, GitHubClient gitHubClient) {
+    public PrUpdateService(PrDescriptionService prDescriptionService, GitHubClient gitHubClient,
+                           PrLabeler prLabeler) {
         this.prDescriptionService = prDescriptionService;
         this.gitHubClient = gitHubClient;
+        this.prLabeler = prLabeler;
     }
 
     public UpdatePrResponse updateExistingPr(UpdatePrRequest request) {
@@ -28,6 +31,9 @@ public class PrUpdateService {
         String prUrl = gitHubClient.updatePr(
                 request.repoOwner(), request.repoName(), prNumber,
                 generated.title(), generated.description());
+
+        // Best effort: the PR text is already updated, so a labeling problem must not fail the request.
+        prLabeler.applyTypeLabel(request.repoOwner(), request.repoName(), prNumber, generated.type());
 
         return new UpdatePrResponse(generated, prNumber, prUrl);
     }

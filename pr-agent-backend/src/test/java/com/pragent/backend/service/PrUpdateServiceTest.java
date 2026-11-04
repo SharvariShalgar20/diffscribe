@@ -19,12 +19,13 @@ class PrUpdateServiceTest {
 
     private final PrDescriptionService descriptions = mock(PrDescriptionService.class);
     private final GitHubClient github = mock(GitHubClient.class);
-    private final PrUpdateService service = new PrUpdateService(descriptions, github);
+    private final PrLabeler labeler = mock(PrLabeler.class);
+    private final PrUpdateService service = new PrUpdateService(descriptions, github, labeler);
 
     private final UpdatePrRequest request = new UpdatePrRequest("owner", "repo", "branch", List.of("diff"));
 
     @Test
-    void generatesThenUpdatesTheFoundPr() {
+    void generatesUpdatesAndThenLabelsTheFoundPr() {
         PrDescription generated = new PrDescription("feat: add thing", "## What changed\nthing", ChangeType.FEAT);
         when(github.findOpenPrNumber("owner", "repo", "branch")).thenReturn(8);
         when(descriptions.generate(List.of("diff"))).thenReturn(generated);
@@ -36,16 +37,17 @@ class PrUpdateServiceTest {
         assertEquals(8, response.prNumber());
         assertEquals("https://github.com/owner/repo/pull/8", response.prUrl());
         assertSame(generated, response.generated());
+        verify(labeler).applyTypeLabel("owner", "repo", 8, ChangeType.FEAT);
     }
 
     @Test
-    void missingPrFailsBeforeAnyModelWork() {
+    void missingPrFailsBeforeAnyModelWorkOrLabeling() {
         when(github.findOpenPrNumber("owner", "repo", "branch"))
                 .thenThrow(new NoSuchElementException("no PR"));
 
         assertThrows(NoSuchElementException.class, () -> service.updateExistingPr(request));
 
-        verifyNoInteractions(descriptions);
+        verifyNoInteractions(descriptions, labeler);
         verify(github, never()).updatePr(any(), any(), anyInt(), any(), any());
     }
 }
