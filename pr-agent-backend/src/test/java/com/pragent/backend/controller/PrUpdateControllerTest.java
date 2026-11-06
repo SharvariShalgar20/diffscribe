@@ -1,10 +1,12 @@
 package com.pragent.backend.controller;
 
 import com.pragent.backend.dto.ChangeType;
+import com.pragent.backend.dto.CreatePrResponse;
 import com.pragent.backend.dto.PrDescription;
 import com.pragent.backend.dto.UpdatePrResponse;
 import com.pragent.backend.github.GitHubAuthException;
 import com.pragent.backend.github.GitHubRateLimitException;
+import com.pragent.backend.github.GitHubValidationException;
 import com.pragent.backend.ollama.OllamaUnavailableException;
 import com.pragent.backend.service.PrUpdateService;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,9 @@ class PrUpdateControllerTest {
     private static final String VALID_BODY =
             "{\"repoOwner\":\"o\",\"repoName\":\"r\",\"branch\":\"b\",\"diffChunks\":[\"diff\"]}";
 
+    private static final String CREATE_BODY =
+            "{\"repoOwner\":\"o\",\"repoName\":\"r\",\"branch\":\"b\",\"base\":\"main\",\"diffChunks\":[\"diff\"]}";
+
     private PrUpdateService service;
     private MockMvc mvc;
 
@@ -37,6 +42,10 @@ class PrUpdateControllerTest {
         mvc = MockMvcBuilders.standaloneSetup(new PrUpdateController(service))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
+    }
+
+    private ResultActions sendCreate(String body) throws Exception {
+        return mvc.perform(post("/api/pr/create").contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private ResultActions send(String body) throws Exception {
@@ -89,5 +98,29 @@ class PrUpdateControllerTest {
     void githubAuthFailureMapsTo502() throws Exception {
         when(service.updateExistingPr(any())).thenThrow(new GitHubAuthException("bad token"));
         send(VALID_BODY).andExpect(status().isBadGateway());
+    }
+
+    @Test
+    void createWithoutABaseIsABadRequest() throws Exception {
+        sendCreate("{\"repoOwner\":\"o\",\"repoName\":\"r\",\"branch\":\"b\",\"diffChunks\":[\"diff\"]}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createReportsWhetherThePrWasCreated() throws Exception {
+        when(service.createOrUpdatePr(any())).thenReturn(new CreatePrResponse(
+                new PrDescription("feat: x", "body", ChangeType.FEAT), 9, "https://github.com/o/r/pull/9", true));
+
+        String body = sendCreate(CREATE_BODY).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("\"created\":true"), body);
+        assertTrue(body.contains("\"prNumber\":9"), body);
+    }
+
+    @Test
+    void githubValidationFailureMapsTo422() throws Exception {
+        when(service.createOrUpdatePr(any())).thenThrow(new GitHubValidationException("branch not pushed"));
+        sendCreate(CREATE_BODY).andExpect(status().isUnprocessableEntity());
     }
 }
