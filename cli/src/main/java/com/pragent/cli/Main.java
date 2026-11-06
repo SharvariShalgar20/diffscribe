@@ -6,6 +6,7 @@ import com.pragent.cli.diff.DiffFilter;
 import com.pragent.cli.diff.NumstatParser;
 import com.pragent.cli.git.GitClient;
 import com.pragent.cli.http.BackendClient;
+import com.pragent.cli.http.CreatePrResponse;
 import com.pragent.cli.http.UpdatePrResponse;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -44,6 +45,11 @@ public class Main implements Runnable {
             description = "Print the filtered diff to stdout instead of calling the backend. No network calls.")
     private boolean dryRun;
 
+    @Option(names = {"--create-pr"},
+            description = "Create the PR if none exists for this branch (run after the first push). "
+                    + "Updates it if one exists. Ignored with --dry-run.")
+    private boolean createPr;
+
     @Override
     public void run() {
         try {
@@ -65,7 +71,7 @@ public class Main implements Runnable {
             if (dryRun) {
                 printChunks(chunks);
             } else {
-                callBackendAndUpdatePr(git, chunks, effectiveBackendUrl);
+                callBackend(git, chunks, effectiveBackendUrl, effectiveBase);;
             }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
@@ -132,19 +138,36 @@ public class Main implements Runnable {
         }
     }
 
-    private void callBackendAndUpdatePr(GitClient git, List<String> chunks, String backendUrl) throws Exception {
+    private void callBackend(GitClient git, List<String> chunks, String backendUrl, String base) throws Exception {
         String[] ownerAndRepo = git.getRemoteOwnerAndRepo();
         String owner = ownerAndRepo[0];
         String repo = ownerAndRepo[1];
         String branch = git.getCurrentBranch();
-
-        System.err.println("Updating PR for " + owner + "/" + repo + " branch " + branch
-                + " via " + backendUrl + " ...");
-
         BackendClient backendClient = new BackendClient(backendUrl);
-        UpdatePrResponse response = backendClient.updatePr(owner, repo, branch, chunks);
 
-        System.out.println("Updated PR #" + response.prNumber() + ": " + response.prUrl());
+        if (!createPr) {
+            System.err.println("Updating PR for " + owner + "/" + repo + " branch " + branch
+                    + " via " + backendUrl + " ...");
+            UpdatePrResponse response = backendClient.updatePr(owner, repo, branch, chunks);
+            System.out.println("Updated PR #" + response.prNumber() + ": " + response.prUrl());
+            System.out.println("Title: " + response.generated().title());
+            System.out.println("Type: " + response.generated().type());
+            return;
+        }
+
+        if (branch.equals("HEAD")) {
+            throw new IllegalStateException("You are on a detached HEAD. Check out a branch first.");
+        }
+        if (!git.remoteBranchExists(branch)) {
+            throw new IllegalStateException("Branch '" + branch + "' is not on GitHub yet. Run: git push -u origin "
+                    + branch + "   then run this again with --create-pr.");
+        }
+
+        System.err.println("Creating (or updating) the PR for " + owner + "/" + repo + " branch " + branch
+                + " via " + backendUrl + " ...");
+        CreatePrResponse response = backendClient.createPr(owner, repo, branch, GitClient.toBranchName(base), chunks);
+        System.out.println((response.created() ? "Created" : "Updated") + " PR #" + response.prNumber()
+                + ": " + response.prUrl());
         System.out.println("Title: " + response.generated().title());
         System.out.println("Type: " + response.generated().type());
     }
