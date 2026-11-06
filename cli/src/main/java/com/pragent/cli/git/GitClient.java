@@ -107,4 +107,21 @@ public class GitClient {
     public java.nio.file.Path getRepoRoot() {
         return repoDir;
     }
+
+    /** True if the branch exists on the 'origin' remote (needs network access). */
+    public boolean remoteBranchExists(String branch) throws IOException, InterruptedException {
+        return !run(List.of("ls-remote", "--heads", "origin", "refs/heads/" + branch)).isBlank();
+    }
+
+    /** "origin/main" or "refs/heads/main" becomes "main". GitHub's API wants a plain branch name. */
+    public static String toBranchName(String ref) {
+        String r = ref.strip();
+        if (r.startsWith("refs/heads/")) {
+            r = r.substring("refs/heads/".length());
+        }
+        if (r.startsWith("origin/")) {
+            r = r.substring("origin/".length());
+        }
+        return r;
+    }
 }

@@ -12,9 +12,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Component
 public class GitHubClient {
+
+    public record PullRequestRef(int number, String url) {}
 
     private record PullRequestSummary(int number) {}
 
@@ -22,13 +25,90 @@ public class GitHubClient {
 
     private record UpdatedPr(@JsonProperty("html_url") String htmlUrl) {}
 
-    private final RestClient restClient;
+    private record CreatePrPayload(String title, String head, String base, String body) {}
+
+    private record CreatedPr(int number, @JsonProperty("html_url") String htmlUrl) {}
 
     private record LabelName(String name) {}
 
     private record CreateLabelPayload(String name, String color, String description) {}
 
     private record SetLabelsPayload(List<String> labels) {}
+
+    private final RestClient restClient;
+
+    public GitHubClient(GitHubProperties properties) {
+        this.restClient = RestClient.builder()
+                .baseUrl("https://api.github.com")
+                .defaultHeader("Authorization", "Bearer " + properties.token())
+                .defaultHeader("Accept", "application/vnd.github+json")
+                .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
+                .build();
+    }
+
+    public Optional<Integer> findOpenPr(String owner, String repo, String branch) {
+        try {
+            List<PullRequestSummary> prs = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repo}/pulls")
+                            .queryParam("state", "open")
+                            .queryParam("head", owner + ":" + branch)
+                            .build(owner, repo))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<PullRequestSummary>>() {});
+            if (prs == null || prs.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(prs.get(0).number());
+        } catch (HttpClientErrorException e) {
+            throw translate(e);
+        }
+    }
+
+    public int findOpenPrNumber(String owner, String repo, String branch) {
+        return findOpenPr(owner, repo, branch).orElseThrow(() -> new NoSuchElementException(
+                "No open PR found for branch '" + branch + "' in " + owner + "/" + repo));
+    }
+
+    public String updatePr(String owner, String repo, int prNumber, String title, String body) {
+        try {
+            UpdatedPr updated = restClient.patch()
+                    .uri("/repos/{owner}/{repo}/pulls/{prNumber}", owner, repo, prNumber)
+                    .body(new UpdatePrPayload(title, body))
+                    .retrieve()
+                    .body(UpdatedPr.class);
+            return updated != null ? updated.htmlUrl() : null;
+        } catch (HttpClientErrorException e) {
+            throw translate(e);
+        }
+    }
+
+    /**
+     * GitHub answers 422 when the head branch isn't on GitHub, when there are no
+     * commits between base and head, or when a PR already exists. That is handled
+     * here and not in translate(), because a 422 from other calls means different things.
+     */
+    public PullRequestRef createPr(String owner, String repo, String head, String base,
+                                   String title, String body) {
+        try {
+            CreatedPr created = restClient.post()
+                    .uri("/repos/{owner}/{repo}/pulls", owner, repo)
+                    .body(new CreatePrPayload(title, head, base, body))
+                    .retrieve()
+                    .body(CreatedPr.class);
+            if (created == null) {
+                throw new IllegalStateException("GitHub returned an empty response when creating the PR.");
+            }
+            return new PullRequestRef(created.number(), created.htmlUrl());
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 422) {
+                throw new GitHubValidationException("GitHub could not create the PR (422). Check that branch '"
+                        + head + "' is pushed to GitHub, has commits that '" + base
+                        + "' does not, and has no PR yet. GitHub said: " + shorten(e.getResponseBodyAsString()));
+            }
+            throw translate(e);
+        }
+    }
 
     public List<String> getLabelNames(String owner, String repo, int issueNumber) {
         List<LabelName> labels = restClient.get()
@@ -62,54 +142,10 @@ public class GitHubClient {
                 .toBodilessEntity();
     }
 
-    public GitHubClient(GitHubProperties properties) {
-        this.restClient = RestClient.builder()
-                .baseUrl("https://api.github.com")
-                .defaultHeader("Authorization", "Bearer " + properties.token())
-                .defaultHeader("Accept", "application/vnd.github+json")
-                .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
-                .build();
-    }
-
-    public int findOpenPrNumber(String owner, String repo, String branch) {
-        try {
-            List<PullRequestSummary> prs = restClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/repos/{owner}/{repo}/pulls")
-                            .queryParam("state", "open")
-                            .queryParam("head", owner + ":" + branch)
-                            .build(owner, repo))
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<List<PullRequestSummary>>() {});
-
-            if (prs == null || prs.isEmpty()) {
-                throw new NoSuchElementException(
-                        "No open PR found for branch '" + branch + "' in " + owner + "/" + repo);
-            }
-            return prs.get(0).number();
-        } catch (HttpClientErrorException e) {
-            throw translate(e);
-        }
-    }
-
-    public String updatePr(String owner, String repo, int prNumber, String title, String body) {
-        try {
-            UpdatedPr updated = restClient.patch()
-                    .uri("/repos/{owner}/{repo}/pulls/{prNumber}", owner, repo, prNumber)
-                    .body(new UpdatePrPayload(title, body))
-                    .retrieve()
-                    .body(UpdatedPr.class);
-            return updated != null ? updated.htmlUrl() : null;
-        } catch (HttpClientErrorException e) {
-            throw translate(e);
-        }
-    }
-
     /**
      * Maps GitHub's raw HTTP errors to distinct, actionable exceptions.
      * GitHub signals rate limiting with 403 or 429 plus rate-limit headers,
-     * so the status code alone can't distinguish "rate limited" from
-     * "forbidden".
+     * so the status code alone can't distinguish "rate limited" from "forbidden".
      */
     static RuntimeException translate(HttpClientErrorException e) {
         int status = e.getStatusCode().value();
@@ -152,5 +188,13 @@ public class GitHubClient {
             }
         }
         return "Try again later.";
+    }
+
+    private static String shorten(String text) {
+        if (text == null) {
+            return "";
+        }
+        String oneLine = text.replaceAll("\\s+", " ").strip();
+        return oneLine.length() > 300 ? oneLine.substring(0, 300) + "..." : oneLine;
     }
 }

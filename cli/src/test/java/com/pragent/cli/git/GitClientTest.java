@@ -31,4 +31,13 @@ class GitClientTest {
         assertThrows(IllegalStateException.class,
                 () -> GitClient.parseOwnerAndRepo("https://github.com/onlyowner"));
     }
+
+    @Test
+    void toBranchNameStripsRemoteAndRefPrefixes() {
+        assertEquals("main", GitClient.toBranchName("main"));
+        assertEquals("main", GitClient.toBranchName("origin/main"));
+        assertEquals("develop", GitClient.toBranchName("refs/heads/develop"));
+        assertEquals("feature/x", GitClient.toBranchName("origin/feature/x"));
+        assertEquals("feature/x", GitClient.toBranchName("feature/x"));
+    }
 }

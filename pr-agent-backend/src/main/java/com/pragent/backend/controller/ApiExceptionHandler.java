@@ -2,6 +2,7 @@ package com.pragent.backend.controller;
 
 import com.pragent.backend.github.GitHubAuthException;
 import com.pragent.backend.github.GitHubRateLimitException;
+import com.pragent.backend.github.GitHubValidationException;
 import com.pragent.backend.ollama.OllamaUnavailableException;
 import com.pragent.backend.service.ModelOutputException;
 import org.springframework.http.HttpStatus;
@@ -43,5 +44,10 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
                 "The model's answer could not be understood after retrying: " + e.getMessage()
                         + " Try again, or use a larger model (OLLAMA_MODEL).");
+    }
+
+    @ExceptionHandler(GitHubValidationException.class)
+    public ResponseEntity<String> handleGitHubValidation(GitHubValidationException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(e.getMessage());
     }
 }
