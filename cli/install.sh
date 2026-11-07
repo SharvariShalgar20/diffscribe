@@ -9,7 +9,13 @@ set -e
 INSTALL_DIR="$HOME/.pragent"
 mkdir -p "$INSTALL_DIR/githooks"
 
-cp target/pr-agent-cli.jar "$INSTALL_DIR/pr-agent-cli.jar"
+JAR_SOURCE="${1:-target/pr-agent-cli.jar}"
+if [ ! -f "$JAR_SOURCE" ]; then
+  echo "ERROR: jar not found at $JAR_SOURCE."
+  echo "Build it first (mvn clean package), or pass its path: ./install.sh /path/to/pr-agent-cli.jar"
+  exit 1
+fi
+cp "$JAR_SOURCE" "$INSTALL_DIR/pr-agent-cli.jar"
 echo "Installed jar to $INSTALL_DIR/pr-agent-cli.jar"
 
 JAVA_BIN="$(command -v java)"
