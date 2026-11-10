@@ -32,3 +32,18 @@ jobs:
       # verify = compile + tests + package, so a broken pom or a failing
       # shade/repackage step is caught as well, not just failing tests.
       - run: mvn -B verify
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the compose files
+        env:
+          GITHUB_TOKEN: dummy-for-validation
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.ollama.yml config -q
+
+      - name: Build the backend image
+        run: docker build -t diffscribe-backend pr-agent-backend
