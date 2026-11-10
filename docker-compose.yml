@@ -1,0 +1,16 @@
+# Backend only. Uses the Ollama already running on your machine.
+services:
+  backend:
+    build: ./pr-agent-backend
+    image: diffscribe-backend
+    ports:
+      # 127.0.0.1 keeps it private: this service holds your GitHub token and
+      # can edit PRs, so it must not be reachable from other machines.
+      - "127.0.0.1:8080:8080"
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?Set GITHUB_TOKEN in your shell first}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
