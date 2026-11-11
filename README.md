@@ -230,6 +230,22 @@ Results so far for `qwen2.5-coder:1.5b`, 21 answers each:
 
 Most of the type gain comes from the file-path rules (docs-only, test-only and build-only changes), not the model. On the four samples that need real judgement (new feature vs fix vs refactor) the model is right about a third of the time, and it tends to answer `fix` for new code.
 
+## Docker (optional)
+
+Runs the backend in a container. Your CLI and git hook stay on the host and keep using `http://localhost:8080`.
+
+```bash
+# backend only, using the Ollama already running on your machine
+docker compose up --build -d
+
+# or run Ollama in Docker too
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml up --build -d
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml exec ollama ollama pull qwen2.5-coder:1.5b
+```
+
+`GITHUB_TOKEN` must be set in the shell that runs `docker compose`. It is passed in at runtime and is never baked into the image. The port is bound to `127.0.0.1` on purpose: the backend holds your GitHub token and must not be reachable from other machines. Stop with `docker compose down` (add `-v` to also remove the model volume).
+
+
 ## Tests and CI
 
 ```powershell
