@@ -6,6 +6,8 @@
 
 Writes your pull request title and description for you. On `git push`, a local CLI extracts the diff, a Spring AI backend generates the PR text with a **local** Ollama model, and the result is written onto your open GitHub PR. No diffs are pasted into a chatbot, and no code leaves your machine except the PR text sent to GitHub.
 
+**New here?** Follow the [step-by-step quickstart](docs/QUICKSTART.md). To remove diffscribe, see [UNINSTALL](docs/UNINSTALL.md).
+
 ## How it works
 
 ```
@@ -182,6 +184,8 @@ If the branch isn't on GitHub yet, the CLI stops straight away and tells you the
 ./install.sh path/to/pr-agent-cli.jar   # or with a downloaded jar
 ```
 This copies the jar to `~/.pragent/`, writes a global `pre-push` hook, and sets `git config --global core.hooksPath`. The hook only runs in repos that contain a `.pragent.properties` file, and it never blocks a push. If diffscribe fails (backend down, no PR yet, and so on), it prints a message and the push continues. Re-run `install.sh` after you get a new jar.
+
+To remove it again, run ./uninstall.sh (details in docs/UNINSTALL.md).
 
 Notes:
 - The installer records the full path of the `java` it finds, because git hooks can see a different `PATH` than your terminal. If that Java is older than 17 the jar won't run.
