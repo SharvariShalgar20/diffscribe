@@ -1,15 +1,15 @@
 package com.pragent.backend.controller;
 
-import org.springframework.ai.chat.client.ChatClient;
+import com.pragent.backend.llm.LlmProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HealthController {
-    private final ChatClient chatClient;
+    private final LlmProvider llmProvider;
 
-    public HealthController(ChatClient chatClient) {
-        this.chatClient = chatClient;
+    public HealthController(LlmProvider llmProvider) {
+        this.llmProvider = llmProvider;
     }
 
     @GetMapping("/api/health")
@@ -19,9 +19,6 @@ public class HealthController {
 
     @GetMapping("/api/test-llm")
     public String testLlm() {
-        return chatClient.prompt()
-                .user("Reply with exactly the words: Ollama connection working.")
-                .call()
-                .content();
+        return llmProvider.generate("", "Reply with exactly the words: Ollama connection working.");
     }
 }
