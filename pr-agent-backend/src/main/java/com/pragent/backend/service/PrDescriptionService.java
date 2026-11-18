@@ -2,10 +2,9 @@ package com.pragent.backend.service;
 
 import com.pragent.backend.dto.ChangeType;
 import com.pragent.backend.dto.PrDescription;
-import com.pragent.backend.ollama.OllamaHealthChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
+import com.pragent.backend.llm.LlmProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -91,16 +90,14 @@ public class PrDescriptionService {
             "\n\nYour previous reply could not be read. Answer again with ONLY the five lines "
                     + "TYPE:, TITLE:, WHAT:, WHY:, TEST: and nothing else.";
 
-    private final ChatClient chatClient;
-    private final OllamaHealthChecker ollamaHealthChecker;
+    private final LlmProvider llmProvider;
 
-    public PrDescriptionService(ChatClient chatClient, OllamaHealthChecker ollamaHealthChecker) {
-        this.chatClient = chatClient;
-        this.ollamaHealthChecker = ollamaHealthChecker;
+    public PrDescriptionService(LlmProvider llmProvider) {
+        this.llmProvider = llmProvider;
     }
 
     public PrDescription generate(List<String> diffChunks) {
-        ollamaHealthChecker.checkReachableOrThrow();
+        llmProvider.checkAvailableOrThrow();
 
         ModelOutputParser.Parsed parsed;
         if (diffChunks.size() == 1) {
@@ -131,11 +128,7 @@ public class PrDescriptionService {
         ModelOutputException last = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             String prompt = attempt == 1 ? userPrompt : userPrompt + RETRY_HINT;
-            String raw = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(prompt)
-                    .call()
-                    .content();
+            String raw = llmProvider.generate(systemPrompt, prompt);
             try {
                 return ModelOutputParser.parse(raw);
             } catch (ModelOutputException e) {
@@ -150,11 +143,9 @@ public class PrDescriptionService {
         List<String> summaries = new ArrayList<>();
         int total = diffChunks.size();
         for (int i = 0; i < total; i++) {
-            String summary = chatClient.prompt()
-                    .system(CHUNK_SUMMARY_PROMPT)
-                    .user("This is part " + (i + 1) + " of " + total + " of a single diff:\n\n" + diffChunks.get(i))
-                    .call()
-                    .content();
+            String summary = llmProvider.generate(
+                    CHUNK_SUMMARY_PROMPT,
+                    "This is part " + (i + 1) + " of " + total + " of a single diff:\n\n" + diffChunks.get(i));
             summaries.add(summary == null ? "" : summary);
         }
         return summaries;
