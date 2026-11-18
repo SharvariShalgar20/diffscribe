@@ -6,6 +6,7 @@ import com.pragent.backend.ollama.OllamaHealthChecker;
 import com.pragent.backend.ollama.OllamaUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import com.pragent.backend.llm.OllamaProvider;
 
 import java.util.List;
 
@@ -36,7 +37,7 @@ class PrDescriptionServiceTest {
         ChatClient chatClient = mock(ChatClient.class);
         doThrow(new OllamaUnavailableException("Ollama is not reachable", null))
                 .when(healthChecker).checkReachableOrThrow();
-        PrDescriptionService service = new PrDescriptionService(chatClient, healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(chatClient, healthChecker));
 
         assertThrows(OllamaUnavailableException.class, () -> service.generate(List.of("some diff")));
         verifyNoInteractions(chatClient);
@@ -44,7 +45,7 @@ class PrDescriptionServiceTest {
 
     @Test
     void buildsTitleAndDescriptionFromAGoodAnswer() {
-        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering(GOOD_ANSWER), healthChecker));
 
         PrDescription result = service.generate(List.of(JAVA_DIFF));
 
@@ -57,8 +58,7 @@ class PrDescriptionServiceTest {
 
     @Test
     void retriesOnceWhenTheFirstAnswerCannotBeRead() {
-        PrDescriptionService service = new PrDescriptionService(
-                clientAnswering("sorry, here is some rambling", GOOD_ANSWER), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering("sorry, here is some rambling", GOOD_ANSWER), healthChecker));
 
         PrDescription result = service.generate(List.of(JAVA_DIFF));
 
@@ -67,15 +67,14 @@ class PrDescriptionServiceTest {
 
     @Test
     void givesUpWithAClearErrorAfterTwoBadAnswers() {
-        PrDescriptionService service = new PrDescriptionService(
-                clientAnswering("nonsense", "more nonsense"), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering("nonsense", "more nonsense"), healthChecker));
 
         assertThrows(ModelOutputException.class, () -> service.generate(List.of(JAVA_DIFF)));
     }
 
     @Test
     void pathRulesOverrideTheModelsTypeAndTheTitlePrefixFollows() {
-        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering(GOOD_ANSWER), healthChecker));
 
         PrDescription result = service.generate(List.of(README_DIFF));
 
@@ -85,7 +84,7 @@ class PrDescriptionServiceTest {
 
     @Test
     void appendsReviewerNotesWhenSourceChangesHaveNoTests() {
-        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering(GOOD_ANSWER), healthChecker));
 
         PrDescription result = service.generate(List.of(JAVA_DIFF));
 
@@ -95,7 +94,7 @@ class PrDescriptionServiceTest {
 
     @Test
     void docsOnlyChangeGetsNoReviewerNotes() {
-        PrDescriptionService service = new PrDescriptionService(clientAnswering(GOOD_ANSWER), healthChecker);
+        PrDescriptionService service = new PrDescriptionService(new OllamaProvider(clientAnswering(GOOD_ANSWER), healthChecker));
 
         PrDescription result = service.generate(List.of(README_DIFF));
 
