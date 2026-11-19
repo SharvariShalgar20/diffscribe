@@ -19,6 +19,6 @@ public class HealthController {
 
     @GetMapping("/api/test-llm")
     public String testLlm() {
-        return llmProvider.generate("", "Reply with exactly the words: Ollama connection working.");
+        return llmProvider.generate("", "Reply with exactly the words: LLM connection working.");
     }
 }
