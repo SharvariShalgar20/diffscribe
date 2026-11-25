@@ -28,4 +28,11 @@ pragent:
     api-key: ${LLM_API_KEY:}
     base-url: ${LLM_BASE_URL:}         # optional, preset used if empty
     model: ${LLM_MODEL:}               # optional, preset used if empty
-
+  retry:
+    max-attempts: ${LLM_RETRY_MAX_ATTEMPTS:3}
+    max-wait-seconds: ${LLM_RETRY_MAX_WAIT_SECONDS:20}
+  fallback: # optional second provider; off while provider is empty
+    provider: ${LLM_FALLBACK_PROVIDER:}
+    api-key: ${LLM_FALLBACK_API_KEY:}
+    base-url: ${LLM_FALLBACK_BASE_URL:}
+    model: ${LLM_FALLBACK_MODEL:}

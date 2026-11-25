@@ -11,6 +11,8 @@ import org.springframework.web.client.RestClient;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
+import java.net.SocketTimeoutException;
+import java.time.Duration;
 
 class OpenAiCompatibleProviderTest {
 
@@ -57,16 +59,61 @@ class OpenAiCompatibleProviderTest {
     }
 
     @Test
-    void errorStatusBecomesAnExceptionThatNeverContainsTheKey() {
+    void status401BecomesAnAuthExceptionThatNeverContainsTheKey() {
         server.expect(requestTo("https://llm.test/v1/chat/completions"))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"error\":\"invalid key\"}"));
+                        .contentType(MediaType.APPLICATION_JSON).body("{\"error\":\"invalid key\"}"));
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> provider.generate("", "hello"));
+        LlmAuthException e = assertThrows(LlmAuthException.class, () -> provider.generate("", "hello"));
 
         assertTrue(e.getMessage().contains("401"));
+        assertFalse(e.getMessage().contains(KEY));
+    }
+
+    @Test
+    void status429BecomesARateLimitExceptionWithRetryAfter() {
+        server.expect(requestTo("https://llm.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "7"));
+
+        LlmRateLimitException e = assertThrows(LlmRateLimitException.class, () -> provider.generate("", "hello"));
+
+        assertEquals(Duration.ofSeconds(7), e.retryAfter().orElseThrow());
+    }
+
+    @Test
+    void status429WithoutHeaderHasNoRetryAfter() {
+        server.expect(requestTo("https://llm.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        LlmRateLimitException e = assertThrows(LlmRateLimitException.class, () -> provider.generate("", "hello"));
+
+        assertTrue(e.retryAfter().isEmpty());
+    }
+
+    @Test
+    void status503BecomesUnavailable() {
+        server.expect(requestTo("https://llm.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThrows(LlmUnavailableException.class, () -> provider.generate("", "hello"));
+    }
+
+    @Test
+    void timeoutBecomesUnavailable() {
+        server.expect(requestTo("https://llm.test/v1/chat/completions"))
+                .andRespond(withException(new SocketTimeoutException("read timed out")));
+
+        assertThrows(LlmUnavailableException.class, () -> provider.generate("", "hello"));
+    }
+
+    @Test
+    void otherClientErrorsStayAGenericFailureWithTheStatus() {
+        server.expect(requestTo("https://llm.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).body("model not found"));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> provider.generate("", "hello"));
+
+        assertTrue(e.getMessage().contains("400"));
         assertFalse(e.getMessage().contains(KEY));
     }
 
