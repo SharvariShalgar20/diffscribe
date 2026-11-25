@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.pragent.backend.llm.LlmAuthException;
+import com.pragent.backend.llm.LlmRateLimitException;
+import com.pragent.backend.llm.LlmUnavailableException;
 
 import java.util.NoSuchElementException;
 
@@ -49,5 +52,20 @@ public class ApiExceptionHandler {
     @ExceptionHandler(GitHubValidationException.class)
     public ResponseEntity<String> handleGitHubValidation(GitHubValidationException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(e.getMessage());
+    }
+
+    @ExceptionHandler(LlmAuthException.class)
+    public ResponseEntity<String> handleLlmAuth(LlmAuthException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(e.getMessage());
+    }
+
+    @ExceptionHandler(LlmRateLimitException.class)
+    public ResponseEntity<String> handleLlmRateLimit(LlmRateLimitException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(e.getMessage());
+    }
+
+    @ExceptionHandler(LlmUnavailableException.class)
+    public ResponseEntity<String> handleLlmUnavailable(LlmUnavailableException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
     }
 }
