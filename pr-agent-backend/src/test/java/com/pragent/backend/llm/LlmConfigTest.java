@@ -13,7 +13,7 @@ import static org.mockito.Mockito.mock;
 class LlmConfigTest {
 
     @Configuration
-    @EnableConfigurationProperties(LlmProperties.class)
+    @EnableConfigurationProperties({LlmProperties.class, LlmFallbackProperties.class})
     static class PropsConfig {}
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -22,23 +22,35 @@ class LlmConfigTest {
             .withBean(OllamaHealthChecker.class, () -> mock(OllamaHealthChecker.class));
 
     @Test
-    void defaultsToOllama() {
-        runner.run(ctx -> assertThat(ctx.getBean(LlmProvider.class)).isInstanceOf(OllamaProvider.class));
+    void defaultsToOllamaWrappedInRetry() {
+        runner.run(ctx -> assertThat(ctx.getBean(LlmProvider.class)).isInstanceOf(RetryingLlmProvider.class));
     }
 
     @Test
-    void geminiWithKeyUsesTheCloudProvider() {
+    void cloudProviderWithKeyStartsUp() {
         runner.withPropertyValues("pragent.llm.provider=gemini", "pragent.llm.api-key=k")
-                .run(ctx -> assertThat(ctx.getBean(LlmProvider.class))
-                        .isInstanceOf(OpenAiCompatibleProvider.class));
+                .run(ctx -> assertThat(ctx.getBean(LlmProvider.class)).isInstanceOf(RetryingLlmProvider.class));
     }
 
     @Test
-    void geminiWithoutKeyStopsStartupWithAClearMessage() {
+    void cloudProviderWithoutKeyStopsStartupWithAClearMessage() {
         runner.withPropertyValues("pragent.llm.provider=gemini")
                 .run(ctx -> {
                     assertThat(ctx).hasFailed();
                     assertThat(ctx.getStartupFailure()).hasStackTraceContaining("LLM_API_KEY");
                 });
+    }
+
+    @Test
+    void configuredFallbackWrapsThePrimary() {
+        runner.withPropertyValues("pragent.llm.provider=gemini", "pragent.llm.api-key=k",
+                        "pragent.llm.fallback.provider=ollama")
+                .run(ctx -> assertThat(ctx.getBean(LlmProvider.class)).isInstanceOf(FallbackLlmProvider.class));
+    }
+
+    @Test
+    void fallbackWithoutItsKeyStopsStartup() {
+        runner.withPropertyValues("pragent.llm.fallback.provider=groq")
+                .run(ctx -> assertThat(ctx).hasFailed());
     }
 }
